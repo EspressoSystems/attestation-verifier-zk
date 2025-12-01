@@ -1,41 +1,92 @@
+pub mod routes;
+
+use actix_web::{App, HttpServer, web};
 use dotenv::dotenv;
+use routes::proof_routes;
 
 use alloy_primitives::Address;
 use aws_nitro_enclave_attestation_prover::{
     NitroEnclaveProver, NitroEnclaveVerifierContract, ProverConfig, SP1ProverConfig,
 };
+use tracing::info;
 
-// Read env variable
-fn main() -> anyhow::Result<()> {
+struct Verifier {
+    prover: NitroEnclaveProver,
+}
+
+fn create_prover() -> NitroEnclaveProver {
+    let verifier_address: Address = dotenv::var("NITRO_VERIFIER_ADDRESS")
+        .expect("nitro verifier address undefined")
+        .parse()
+        .expect("invalid nitro verifier address");
+    let rpc_url_string = dotenv::var("RPC_URL").expect("RPC url not specified");
+    let rpc_url = &rpc_url_string.as_str();
+    let verifier = NitroEnclaveVerifierContract::dial(rpc_url, verifier_address, None)
+        .expect("unable to create verifier contract instance");
+    let succint_private_key =
+        dotenv::var("SUCCINT_PRIVATE_KEY").expect("succint private key undefined");
+    let succint_network_rpc_url =
+        dotenv::var("SUCCINT_NETWORK_RPC_URL").expect("succint network rpc url undefined");
+    let prover_config = ProverConfig::sp1_with(SP1ProverConfig {
+        private_key: Some(succint_private_key),
+        rpc_url: Some(succint_network_rpc_url),
+    });
+    NitroEnclaveProver::new(prover_config, Some(verifier))
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
-    let verifier_address: Address = dotenv::var("NITRO_VERIFIER_ADDRESS")?.parse()?;
-    let binding = dotenv::var("RPC_URL")?;
-    let rpc_url: &str = binding.as_str();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
-    let verifier = NitroEnclaveVerifierContract::dial(rpc_url, verifier_address, None)?;
+    let prover = create_prover();
+    let app_state = web::Data::new(Verifier { prover });
 
-    let prover_config = ProverConfig::sp1_with(SP1ProverConfig {
-        private_key: dotenv::var("NETWORK_PRIVATE_KEY").ok(),
-        rpc_url: dotenv::var("NETWORK_RPC_URL").ok(),
-    });
+    info!("Starting server...");
+    HttpServer::new(move || {
+        App::new()
+            .service(proof_routes::generate_proof)
+            .app_data(app_state.clone())
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
+}
 
-    let prover = NitroEnclaveProver::new(prover_config, Some(verifier));
-
-    let report_bytes = std::fs::read("sample_reports/attestation_2.report")?;
-
-    println!("Generating proof, this will take sometime!");
-
-    let onchain_proof = prover.prove_attestation_report(report_bytes)?;
-
-    std::fs::write("proof.json", onchain_proof.encode_json()?)?;
-    println!("Aggregation Proof generated successfully!");
-
-    let onchain_proof_verification_result = prover.verify_on_chain(&onchain_proof);
-    println!(
-        "onchain verfication result: {:?}",
-        onchain_proof_verification_result
-    );
-
-    Ok(())
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{
+        App,
+        body::{BodySize, MessageBody},
+        test, web,
+    };
+    #[actix_web::test]
+    async fn test_generate_proof() {
+        dotenv::from_filename(".env.example").ok();
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .init();
+        info!("Starting test_generate_proof test...");
+        let prover = create_prover();
+        let app_state = web::Data::new(Verifier { prover });
+        let app = test::init_service(
+            App::new()
+                .service(proof_routes::generate_proof)
+                .app_data(app_state.clone()),
+        )
+        .await;
+        let report_bytes = std::fs::read("sample_reports/attestation_2.report")
+            .expect("unable to read report bytes");
+        let req = test::TestRequest::post()
+            .uri("/generate_proof")
+            .set_payload(report_bytes)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert!(resp.status().is_success());
+        assert!(resp.response().body().size() != BodySize::None);
+    }
 }
