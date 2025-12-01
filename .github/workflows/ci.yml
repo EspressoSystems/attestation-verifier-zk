@@ -1,8 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches: [main, attestation-verifier-server]
   pull_request:
     branches: [main]
 
