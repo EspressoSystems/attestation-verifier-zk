@@ -10,7 +10,7 @@ use aws_nitro_enclave_attestation_prover::{
 };
 use tracing::info;
 
-struct Verifier {
+struct ProverState {
     prover: NitroEnclaveProver,
 }
 
@@ -23,13 +23,13 @@ fn create_prover() -> NitroEnclaveProver {
     let rpc_url = &rpc_url_string.as_str();
     let verifier = NitroEnclaveVerifierContract::dial(rpc_url, verifier_address, None)
         .expect("unable to create verifier contract instance");
-    let succint_private_key =
-        dotenv::var("SUCCINT_PRIVATE_KEY").expect("succint private key undefined");
-    let succint_network_rpc_url =
-        dotenv::var("SUCCINT_NETWORK_RPC_URL").expect("succint network rpc url undefined");
+    let succinct_private_key =
+        dotenv::var("SUCCINCT_PRIVATE_KEY").expect("succint private key undefined");
+    let succinct_network_rpc_url =
+        dotenv::var("SUCCINCT_NETWORK_RPC_URL").expect("succint network rpc url undefined");
     let prover_config = ProverConfig::sp1_with(SP1ProverConfig {
-        private_key: Some(succint_private_key),
-        rpc_url: Some(succint_network_rpc_url),
+        private_key: Some(succinct_private_key),
+        rpc_url: Some(succinct_network_rpc_url),
     });
     NitroEnclaveProver::new(prover_config, Some(verifier))
 }
@@ -43,7 +43,7 @@ async fn main() -> std::io::Result<()> {
         .init();
 
     let prover = create_prover();
-    let app_state = web::Data::new(Verifier { prover });
+    let app_state = web::Data::new(ProverState { prover });
 
     info!("Starting server...");
     HttpServer::new(move || {
@@ -72,7 +72,7 @@ mod tests {
             .init();
         info!("Starting test_generate_proof test...");
         let prover = create_prover();
-        let app_state = web::Data::new(Verifier { prover });
+        let app_state = web::Data::new(ProverState { prover });
         let app = test::init_service(
             App::new()
                 .service(proof_routes::generate_proof)
