@@ -34,7 +34,7 @@ pub async fn generate_proof(state: Data<Verifier>, report_bytes: Bytes) -> HttpR
         }
         Err(e) => {
             error!("error generating proof: {:?}", e);
-            return HttpResponse::InternalServerError().body("error generating proof");
+            HttpResponse::InternalServerError().body("error generating proof")
         }
     }
 }
