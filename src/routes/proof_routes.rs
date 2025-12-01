@@ -5,7 +5,7 @@ use actix_web::{
 };
 use tracing::{debug, error};
 
-const MAX_REPORT_SIZE: usize = 10 * 1024 * 1024; // 10MB
+const MAX_REPORT_SIZE: usize = 100 * 1024; // 100KB
 
 #[post("/generate_proof")]
 pub async fn generate_proof(state: Data<ProverState>, report_bytes: Bytes) -> HttpResponse {

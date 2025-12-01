@@ -24,9 +24,9 @@ fn create_prover() -> NitroEnclaveProver {
     let verifier = NitroEnclaveVerifierContract::dial(rpc_url, verifier_address, None)
         .expect("unable to create verifier contract instance");
     let succinct_private_key =
-        dotenv::var("SUCCINCT_PRIVATE_KEY").expect("succint private key undefined");
+        dotenv::var("NETWORK_PRIVATE_KEY").expect("succinct private key undefined");
     let succinct_network_rpc_url =
-        dotenv::var("SUCCINCT_NETWORK_RPC_URL").expect("succint network rpc url undefined");
+        dotenv::var("NETWORK_RPC_URL").expect("succinct network rpc url undefined");
     let prover_config = ProverConfig::sp1_with(SP1ProverConfig {
         private_key: Some(succinct_private_key),
         rpc_url: Some(succinct_network_rpc_url),
@@ -88,5 +88,51 @@ mod tests {
         let resp = test::call_service(&app, req).await;
         assert!(resp.status().is_success());
         assert!(resp.response().body().size() != BodySize::None);
+    }
+    #[actix_web::test]
+    async fn test_generate_proof_empty_report() {
+        dotenv::from_filename(".env.example").ok();
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .init();
+        info!("Starting test_generate_proof_empty_report test...");
+        let prover = create_prover();
+        let app_state = web::Data::new(ProverState { prover });
+        let app = test::init_service(
+            App::new()
+                .service(proof_routes::generate_proof)
+                .app_data(app_state.clone()),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/generate_proof")
+            .set_payload(Vec::<u8>::new())
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+
+    #[actix_web::test]
+    async fn test_generate_proof_oversized_report() {
+        dotenv::from_filename(".env.example").ok();
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .init();
+        info!("Starting test_generate_proof_oversized_report test...");
+        let prover = create_prover();
+        let app_state = web::Data::new(ProverState { prover });
+        let app = test::init_service(
+            App::new()
+                .service(proof_routes::generate_proof)
+                .app_data(app_state.clone()),
+        )
+        .await;
+        let oversized_report = vec![0u8; 200 * 1024]; // 200KB
+        let req = test::TestRequest::post()
+            .uri("/generate_proof")
+            .set_payload(oversized_report)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 413);
     }
 }
