@@ -69,7 +69,8 @@ mod tests {
         dotenv::from_filename(".env.example").ok();
         tracing_subscriber::fmt()
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-            .init();
+            .try_init()
+            .ok();
         info!("Starting test_generate_proof test...");
         let prover = create_prover();
         let app_state = web::Data::new(ProverState { prover });
@@ -94,7 +95,8 @@ mod tests {
         dotenv::from_filename(".env.example").ok();
         tracing_subscriber::fmt()
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-            .init();
+            .try_init()
+            .ok();
         info!("Starting test_generate_proof_empty_report test...");
         let prover = create_prover();
         let app_state = web::Data::new(ProverState { prover });
@@ -117,7 +119,8 @@ mod tests {
         dotenv::from_filename(".env.example").ok();
         tracing_subscriber::fmt()
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-            .init();
+            .try_init()
+            .ok();
         info!("Starting test_generate_proof_oversized_report test...");
         let prover = create_prover();
         let app_state = web::Data::new(ProverState { prover });
