@@ -28,17 +28,16 @@ pub async fn generate_proof(
         ));
     }
 
-    let onchain_proof =
-        web::block(move || state.prover.prove_attestation_report(report_bytes.to_vec()))
-            .await
-            .map_err(|e| {
-                error!("blocking task panicked or was canceled: {e}");
-                actix_web::error::ErrorInternalServerError("proof generation task failed")
-            })?
-            .map_err(|e| {
-                error!("error in blocking task: {:?}", e);
-                actix_web::error::ErrorInternalServerError("error executing proof generation")
-            })?;
+    let onchain_proof = web::block(move || {
+        state
+            .prover
+            .prove_attestation_report(Vec::from(report_bytes))
+    })
+    .await?
+    .map_err(|e| {
+        error!("Error obtaining on chain proof: {:?}", e);
+        actix_web::error::ErrorInternalServerError(e)
+    })?;
 
     debug!("onchain proof result: {:?}", onchain_proof);
     let proof_json = onchain_proof.encode_json().map_err(|e| {
