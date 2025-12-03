@@ -1,41 +1,141 @@
+pub mod routes;
+
+use actix_web::{App, HttpServer, web};
 use dotenv::dotenv;
+use routes::proof_routes;
 
 use alloy_primitives::Address;
 use aws_nitro_enclave_attestation_prover::{
     NitroEnclaveProver, NitroEnclaveVerifierContract, ProverConfig, SP1ProverConfig,
 };
 
-// Read env variable
-fn main() -> anyhow::Result<()> {
+struct ProverState {
+    prover: NitroEnclaveProver,
+}
+
+fn create_prover() -> NitroEnclaveProver {
+    let verifier_address: Address = dotenv::var("NITRO_VERIFIER_ADDRESS")
+        .expect("nitro verifier address undefined")
+        .parse()
+        .expect("invalid nitro verifier address");
+    let rpc_url_string = dotenv::var("RPC_URL").expect("RPC url not specified");
+    let rpc_url = &rpc_url_string.as_str();
+    let verifier = NitroEnclaveVerifierContract::dial(rpc_url, verifier_address, None)
+        .expect("unable to create verifier contract instance");
+    let succinct_private_key =
+        dotenv::var("NETWORK_PRIVATE_KEY").expect("succinct private key undefined");
+    let succinct_network_rpc_url =
+        dotenv::var("NETWORK_RPC_URL").expect("succinct network rpc url undefined");
+    let prover_config = ProverConfig::sp1_with(SP1ProverConfig {
+        private_key: Some(succinct_private_key),
+        rpc_url: Some(succinct_network_rpc_url),
+    });
+    NitroEnclaveProver::new(prover_config, Some(verifier))
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
-    let verifier_address: Address = dotenv::var("NITRO_VERIFIER_ADDRESS")?.parse()?;
-    let binding = dotenv::var("RPC_URL")?;
-    let rpc_url: &str = binding.as_str();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
-    let verifier = NitroEnclaveVerifierContract::dial(rpc_url, verifier_address, None)?;
+    let prover = create_prover();
+    let app_state = web::Data::new(ProverState { prover });
+    let host = dotenv::var("HOST").unwrap_or("127.0.0.1".to_string());
+    let port: u16 = dotenv::var("PORT")
+        .unwrap_or("8080".to_string())
+        .parse()
+        .expect("PORT must be a valid number");
 
-    let prover_config = ProverConfig::sp1_with(SP1ProverConfig {
-        private_key: dotenv::var("NETWORK_PRIVATE_KEY").ok(),
-        rpc_url: dotenv::var("NETWORK_RPC_URL").ok(),
-    });
+    HttpServer::new(move || {
+        App::new()
+            .service(proof_routes::generate_proof)
+            .app_data(app_state.clone())
+    })
+    .bind((host, port))?
+    .run()
+    .await
+}
 
-    let prover = NitroEnclaveProver::new(prover_config, Some(verifier));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{
+        App,
+        body::{BodySize, MessageBody},
+        test, web,
+    };
+    #[actix_web::test]
+    async fn test_generate_proof() {
+        dotenv::from_filename(".env.example").ok();
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .try_init()
+            .ok();
+        let prover = create_prover();
+        let app_state = web::Data::new(ProverState { prover });
+        let app = test::init_service(
+            App::new()
+                .service(proof_routes::generate_proof)
+                .app_data(app_state.clone()),
+        )
+        .await;
+        let report_bytes = std::fs::read("sample_reports/nitro_attestation_data.bin")
+            .expect("unable to read report bytes");
+        let req = test::TestRequest::post()
+            .uri("/generate_proof")
+            .set_payload(report_bytes)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert!(resp.status().is_success());
+        assert!(resp.response().body().size() != BodySize::None);
+    }
+    #[actix_web::test]
+    async fn test_generate_proof_empty_report() {
+        dotenv::from_filename(".env.example").ok();
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .try_init()
+            .ok();
+        let prover = create_prover();
+        let app_state = web::Data::new(ProverState { prover });
+        let app = test::init_service(
+            App::new()
+                .service(proof_routes::generate_proof)
+                .app_data(app_state.clone()),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/generate_proof")
+            .set_payload(Vec::<u8>::new())
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
 
-    let report_bytes = std::fs::read("sample_reports/attestation_2.report")?;
-
-    println!("Generating proof, this will take sometime!");
-
-    let onchain_proof = prover.prove_attestation_report(report_bytes)?;
-
-    std::fs::write("proof.json", onchain_proof.encode_json()?)?;
-    println!("Aggregation Proof generated successfully!");
-
-    let onchain_proof_verification_result = prover.verify_on_chain(&onchain_proof);
-    println!(
-        "onchain verfication result: {:?}",
-        onchain_proof_verification_result
-    );
-
-    Ok(())
+    #[actix_web::test]
+    async fn test_generate_proof_oversized_report() {
+        dotenv::from_filename(".env.example").ok();
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .try_init()
+            .ok();
+        let prover = create_prover();
+        let app_state = web::Data::new(ProverState { prover });
+        let app = test::init_service(
+            App::new()
+                .service(proof_routes::generate_proof)
+                .app_data(app_state.clone()),
+        )
+        .await;
+        let oversized_report = vec![0u8; 200 * 1024]; // 200KB
+        let req = test::TestRequest::post()
+            .uri("/generate_proof")
+            .set_payload(oversized_report)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 413);
+    }
 }
