@@ -8,7 +8,6 @@ use alloy_primitives::Address;
 use aws_nitro_enclave_attestation_prover::{
     NitroEnclaveProver, NitroEnclaveVerifierContract, ProverConfig, SP1ProverConfig,
 };
-use tracing::info;
 
 struct ProverState {
     prover: NitroEnclaveProver,
@@ -44,14 +43,18 @@ async fn main() -> std::io::Result<()> {
 
     let prover = create_prover();
     let app_state = web::Data::new(ProverState { prover });
+    let host = dotenv::var("HOST").unwrap_or("127.0.0.1".to_string());
+    let port: u16 = dotenv::var("PORT")
+        .unwrap_or("8080".to_string())
+        .parse()
+        .expect("PORT must be a valid number");
 
-    info!("Starting server...");
     HttpServer::new(move || {
         App::new()
             .service(proof_routes::generate_proof)
             .app_data(app_state.clone())
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind((host, port))?
     .run()
     .await
 }
@@ -71,7 +74,6 @@ mod tests {
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
             .try_init()
             .ok();
-        info!("Starting test_generate_proof test...");
         let prover = create_prover();
         let app_state = web::Data::new(ProverState { prover });
         let app = test::init_service(
@@ -80,7 +82,7 @@ mod tests {
                 .app_data(app_state.clone()),
         )
         .await;
-        let report_bytes = std::fs::read("sample_reports/attestation_2.report")
+        let report_bytes = std::fs::read("sample_reports/nitro_attestation_data.bin")
             .expect("unable to read report bytes");
         let req = test::TestRequest::post()
             .uri("/generate_proof")
@@ -97,7 +99,6 @@ mod tests {
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
             .try_init()
             .ok();
-        info!("Starting test_generate_proof_empty_report test...");
         let prover = create_prover();
         let app_state = web::Data::new(ProverState { prover });
         let app = test::init_service(
@@ -121,7 +122,6 @@ mod tests {
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
             .try_init()
             .ok();
-        info!("Starting test_generate_proof_oversized_report test...");
         let prover = create_prover();
         let app_state = web::Data::new(ProverState { prover });
         let app = test::init_service(

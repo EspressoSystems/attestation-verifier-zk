@@ -27,7 +27,7 @@ Generate a proof by sending an attestation report to the API:
 
 ```bash
 curl -X POST http://127.0.0.1:8080/generate_proof \
-  --data-binary @sample_reports/attestation_2.report
+  --data-binary @sample_reports/nitro_attestation_data.bin
 ```
 
 ## Development
