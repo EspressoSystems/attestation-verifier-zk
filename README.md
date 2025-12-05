@@ -40,3 +40,7 @@ cargo test
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features
 ```
+
+## Docker
+
+To run using docker simply create a .env file and run `docker compose up`

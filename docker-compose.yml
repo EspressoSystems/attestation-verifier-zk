@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  attestation-verifier-zk:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BIN_NAME: attestation-verifier-zk
+    container_name: attestation-verifier-zk
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      RUST_LOG: info
+    restart: unless-stopped
