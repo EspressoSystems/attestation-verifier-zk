@@ -9,6 +9,8 @@ use aws_nitro_enclave_attestation_prover::{
     NitroEnclaveProver, NitroEnclaveVerifierContract, ProverConfig, SP1ProverConfig,
 };
 
+use crate::routes::{health_routes::health_check, proof_routes::generate_proof};
+
 struct ProverState {
     prover: NitroEnclaveProver,
 }
@@ -51,7 +53,8 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .service(proof_routes::generate_proof)
+            .service(generate_proof)
+            .service(health_check)
             .app_data(app_state.clone())
     })
     .bind((host, port))?
