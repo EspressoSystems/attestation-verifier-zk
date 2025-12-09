@@ -2,7 +2,6 @@ pub mod routes;
 
 use actix_web::{App, HttpServer, web};
 use dotenv::dotenv;
-use routes::proof_routes;
 
 use alloy_primitives::Address;
 use aws_nitro_enclave_attestation_prover::{
@@ -81,7 +80,7 @@ mod tests {
         let app_state = web::Data::new(ProverState { prover });
         let app = test::init_service(
             App::new()
-                .service(proof_routes::generate_proof)
+                .service(generate_proof)
                 .app_data(app_state.clone()),
         )
         .await;
@@ -106,7 +105,7 @@ mod tests {
         let app_state = web::Data::new(ProverState { prover });
         let app = test::init_service(
             App::new()
-                .service(proof_routes::generate_proof)
+                .service(generate_proof)
                 .app_data(app_state.clone()),
         )
         .await;
@@ -129,7 +128,7 @@ mod tests {
         let app_state = web::Data::new(ProverState { prover });
         let app = test::init_service(
             App::new()
-                .service(proof_routes::generate_proof)
+                .service(generate_proof)
                 .app_data(app_state.clone()),
         )
         .await;
