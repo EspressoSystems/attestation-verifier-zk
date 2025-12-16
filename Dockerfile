@@ -11,7 +11,7 @@ FROM debian:bookworm-slim as runtime
 
 ARG BIN_NAME=attestation-verifier-zk
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
     rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m appuser
