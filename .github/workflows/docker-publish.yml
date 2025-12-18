@@ -14,7 +14,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch.runner }}
     permissions:
       contents: read
       packages: write
@@ -22,8 +22,10 @@ jobs:
     strategy:
       matrix:
         arch:
-          - amd64
-          - arm64
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout code
@@ -62,6 +64,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/${{ matrix.arch }}
+          platforms: linux/${{ matrix.arch.arch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
