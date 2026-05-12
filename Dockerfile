@@ -1,5 +1,9 @@
 FROM rustlang/rust:nightly-bookworm as builder
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev && \
+    rm -rf /var/lib/apt/lists/*
+
 ARG BIN_NAME=attestation-verifier-zk
 WORKDIR /app
 

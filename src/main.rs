@@ -31,7 +31,12 @@ fn create_prover() -> NitroEnclaveProver {
         private_key: Some(succinct_private_key),
         rpc_url: Some(succinct_network_rpc_url),
     });
-    NitroEnclaveProver::new(prover_config, Some(verifier))
+    // NitroEnclaveProver::new internally creates a tokio runtime (via SP1 verifier
+    // initialization). Run on a dedicated OS thread to avoid "cannot start a runtime
+    // from within a runtime"
+    std::thread::spawn(move || NitroEnclaveProver::new(prover_config, Some(verifier)))
+        .join()
+        .expect("failed to create NitroEnclaveProver")
 }
 
 #[actix_web::main]
