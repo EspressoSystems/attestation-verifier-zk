@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # Keeps action versions current. Dependabot also updates the matching
+  # entries in .github/workflows/actions.lock in the same PR.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Wait a week after a release before proposing it.
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        # Majors come as separate PRs so breaking changes are reviewed one at a time.
+        update-types: [minor, patch]

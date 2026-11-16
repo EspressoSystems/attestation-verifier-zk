@@ -41,6 +41,16 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --all-features
 ```
 
+### GitHub Actions lockfile
+
+Actions are pinned in `.github/workflows/actions.lock`. After adding or editing
+a workflow's `uses:` lines, regenerate it and commit the result:
+
+```bash
+gh extension install github/gh-actions-lock --pin v0.4.1   # once; match VERSION in actions-lock.yml
+gh actions-lock
+```
+
 ## Docker
 
 To run using docker simply create a .env file and run `docker compose up`
